@@ -14,15 +14,18 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import pathlib
-
+from fastapi.staticfiles import StaticFiles
 
 
 from azure.cosmos import CosmosClient
 import azure.cosmos.exceptions as cosmos_exceptions
 
 
-BASE_DIR = pathlib.Path(__file__).parent
+BASE_DIR = pathlib.Path(__file__).parent.resolve()
 STATIC_DIR = BASE_DIR / "dist"
+
+print(f"Looking for static files in: {STATIC_DIR}")
+
 
 app = FastAPI(
     title="Enhanced Investment AI Advisor",
@@ -58,12 +61,17 @@ openai.api_key = OPENAI_API_KEY
 
 
 
-if STATIC_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
-else:
-    @app.get("/")
-    def no_build():
-        return {"message": "dist folder not found"}
+try:
+    if STATIC_DIR.exists():
+        print(f"Found dist folder at {STATIC_DIR}")
+        app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+    else:
+        print(f"Dist folder not found at {STATIC_DIR}")
+        @app.get("/")
+        def no_build():
+            return {"message": "dist folder not found"}
+except Exception as e:
+    print(f"Error mounting static files: {str(e)}")
 
 # Update CORS middleware
 app.add_middleware(
@@ -73,6 +81,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+@app.exception_handler(500)
+async def internal_error(request, exc):
+    print(f"500 error: {str(exc)}")  # This will show in Azure logs
+    return JSONResponse(
+        status_code=500,
+        content={"message": str(exc)}
+    )
+
+@app.get("/debug")
+async def debug_paths():
+    import os
+    current_dir = os.getcwd()
+    files = os.listdir(current_dir)
+    return {
+        "current_dir": current_dir,
+        "files": files,
+        "dist_exists": os.path.isdir("dist"),
+        "static_path": str(STATIC_DIR),
+    }
+
 
 def get_cosmos_container():
     try:
