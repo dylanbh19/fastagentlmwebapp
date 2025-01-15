@@ -9,6 +9,7 @@ import openai
 import yfinance as yf
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
@@ -73,6 +74,10 @@ try:
 except Exception as e:
     print(f"Error mounting static files: {str(e)}")
 
+
+except Exception as e:
+    print(f"Error mounting static files: {str(e)}")
+
 # Update CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -91,15 +96,27 @@ async def internal_error(request, exc):
 
 @app.get("/debug")
 async def debug_paths():
-    import os
-    current_dir = os.getcwd()
-    files = os.listdir(current_dir)
-    return {
-        "current_dir": current_dir,
-        "files": files,
-        "dist_exists": os.path.isdir("dist"),
-        "static_path": str(STATIC_DIR),
-    }
+    try:
+        import os
+        current_dir = os.getcwd()
+        files = os.listdir(current_dir)
+        static_exists = STATIC_DIR.exists()
+        static_files = os.listdir(STATIC_DIR) if static_exists else []
+        
+        return {
+            "current_dir": str(current_dir),
+            "files_in_current": files,
+            "static_dir": str(STATIC_DIR),
+            "static_exists": static_exists,
+            "static_files": static_files,
+            "base_dir": str(BASE_DIR)
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "current_dir": os.getcwd(),
+            "files": os.listdir(os.getcwd())
+        }
 
 
 def get_cosmos_container():
