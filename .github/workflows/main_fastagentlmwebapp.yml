@@ -1,78 +1,79 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
-
-name: Build and deploy Python app to Azure Web App - fastagentlmwebapp
+name: CI/CD to Azure
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python version
+      # 1) Build React
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+        shell: bash
+
+      # 2) Move dist → root
+      - name: Move build dist
+        run: cp -r frontend/dist dist
+
+      # 3) Setup Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
-      - name: Create and start virtual environment
+      - name: Install Python dependencies
         run: |
-          python -m venv venv
-          source venv/bin/activate
-      
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-        
-      # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
+      # 4) Zip everything
+      - name: Zip artifact
+        run: zip -r release.zip main.py requirements.txt dist
 
-      - name: Upload artifact for deployment jobs
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            release.zip
-            !venv/
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
-    permissions:
-      id-token: write #This is required for requesting the JWT
-
+    needs: build-and-deploy
     steps:
-      - name: Download artifact from build job
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: python-app
 
-      - name: Unzip artifact for deployment
+      - name: Unzip
         run: unzip release.zip
 
-      
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_4C02874997AB46E2BABEB42D39BB8773 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_63160A845AEA4FAF8A8BD8407BD4E17F }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_AA0634D39A6043989D4F4FA0D82A4212 }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: 'Deploy to Azure Web App'
+      # (Optional) Configure startup command
+      - name: Configure Azure Web App
+        run: |
+          az webapp config set \
+            --name fastagentlmwebapp \
+            --resource-group MyResourceGroup \
+            --startup-file "gunicorn main:app -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000"
+
+      - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
         with:
           app-name: 'fastagentlmwebapp'
           slot-name: 'Production'
-          
+          package: .
