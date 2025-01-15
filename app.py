@@ -13,10 +13,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
+import pathlib
+
 
 
 from azure.cosmos import CosmosClient
 import azure.cosmos.exceptions as cosmos_exceptions
+
+
+BASE_DIR = pathlib.Path(__file__).parent
+STATIC_DIR = BASE_DIR / "dist"
 
 app = FastAPI(
     title="Enhanced Investment AI Advisor",
@@ -52,8 +58,8 @@ openai.api_key = OPENAI_API_KEY
 
 
 
-if os.path.isdir("dist"):
-    app.mount("/", StaticFiles(directory="dist", html=True), name="static")
+if STATIC_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 else:
     @app.get("/")
     def no_build():
@@ -240,7 +246,7 @@ async def fetch_news_alphavantage(symbol: str) -> List[Dict[str, Any]]:
     params = {
         "function": "NEWS_SENTIMENT",
         "tickers": symbol,
-        "apikey": ALPHAVANTAGE_API_KEY,
+        "key": ALPHAVANTAGE__KEY,
         "sort": "LATEST",
         "limit": 10
     }
