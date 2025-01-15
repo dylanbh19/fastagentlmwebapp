@@ -16,6 +16,11 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import pathlib
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+
+import os
+import pathlib
 
 
 from azure.cosmos import CosmosClient
@@ -25,7 +30,10 @@ import azure.cosmos.exceptions as cosmos_exceptions
 BASE_DIR = pathlib.Path(__file__).parent.resolve()
 STATIC_DIR = BASE_DIR / "dist"
 
-print(f"Looking for static files in: {STATIC_DIR}")
+print(f"Current working directory: {os.getcwd()}")
+print(f"Base directory: {BASE_DIR}")
+print(f"Static directory: {STATIC_DIR}")
+print(f"Files in current directory: {os.listdir(os.getcwd())}")
 
 
 app = FastAPI(
@@ -68,15 +76,18 @@ try:
         app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
     else:
         print(f"Dist folder not found at {STATIC_DIR}")
+        
         @app.get("/")
-        def no_build():
-            return {"message": "dist folder not found"}
+        async def serve_html():
+            return FileResponse(STATIC_DIR / "index.html")
+            
 except Exception as e:
     print(f"Error mounting static files: {str(e)}")
-
-
-except Exception as e:
-    print(f"Error mounting static files: {str(e)}")
+    
+    @app.get("/")
+    async def fallback():
+        return {"message": f"Setup error: {str(e)}"}
+        
 
 # Update CORS middleware
 app.add_middleware(
